@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Queue Messages</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style>
+		body { font-family: sans-serif; margin: 20px; }
+		.message { padding: 10px; border-bottom: 1px solid #ccc; }
+		button { margin-right: 10px; }
+		.actions { margin-bottom: 20px; }
+	</style>
+</head>
+<body>
+	<div class="actions">
+		<button onclick="purgeAll()">Purge All Messages</button>
+		<button onclick="retryAll()">Retry All Messages</button>
+	</div>
+	<div id="messageList"></div>
+	<script>
+		const urlParams = new URLSearchParams(window.location.search);
+		const queueName = urlParams.get('name');
+
+		function fetchMessages() {
+			fetch(`/api/queues/${queueName}/messages`)
+				.then(res => res.json())
+				.then(data => renderMessages(data));
+		}
+
+		function renderMessages(messages) {
+			const container = document.getElementById('messageList');
+			container.innerHTML = '';
+			messages.forEach(m => {
+				const div = document.createElement('div');
+				div.className = 'message';
+				div.innerHTML = `<strong>ID:</strong> ${m.messageId}<br>
+					<strong>Body:</strong> ${m.body}<br>
+					<button onclick="retryMessage('${m.messageId}', '${m.receiptHandle}')">Retry</button>
+					<button onclick="deleteMessage('${m.messageId}', '${m.receiptHandle}')">Delete</button>`;
+				container.appendChild(div);
+			});
+		}
+
+		function deleteMessage(messageId, receiptHandle) {
+			fetch(`/api/queues/${queueName}/messages/${messageId}/delete?receiptHandle=${encodeURIComponent(receiptHandle)}`, {
+				method: 'POST'
+			}).then(() => fetchMessages());
+		}
+
+		function retryMessage(messageId, receiptHandle) {
+			fetch(`/api/queues/${queueName}/messages/${messageId}/retry?receiptHandle=${encodeURIComponent(receiptHandle)}`, {
+				method: 'POST'
+			}).then(() => fetchMessages());
+		}
+
+		function purgeAll() {
+			fetch(`/api/queues/${queueName}/purge`, { method: 'POST' })
+				.then(() => fetchMessages());
+		}
+
+		function retryAll() {
+			fetch(`/api/queues/${queueName}/retryAll`, { method: 'POST' })
+				.then(() => fetchMessages());
+		}
+
+		fetchMessages();
+	</script>
+</body>
+</html>

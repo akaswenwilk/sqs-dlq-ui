@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Queue List</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style>
+		body { font-family: sans-serif; margin: 20px; }
+		.queue { padding: 10px; border-bottom: 1px solid #ccc; }
+		.search { margin-bottom: 20px; }
+		.pagination { margin-top: 20px; }
+		a { text-decoration: none; color: blue; }
+	</style>
+</head>
+<body>
+	<input type="text" id="search" class="search" placeholder="Search queues..." oninput="filterQueues()">
+	<div id="queueList"></div>
+	<div class="pagination">
+		<button onclick="prevPage()">Prev</button>
+		<span id="pageNum">1</span>
+		<button onclick="nextPage()">Next</button>
+	</div>
+	<script>
+		let currentPage = 1;
+		const pageSize = 10;
+		let queues = [];
+
+		function fetchQueues(page = 1) {
+			fetch(`/api/queues?page=${page}&size=${pageSize}`)
+				.then(res => res.json())
+				.then(data => {
+					queues = data;
+					renderQueues(queues);
+					document.getElementById('pageNum').innerText = currentPage;
+				});
+		}
+
+		function renderQueues(list) {
+			const container = document.getElementById('queueList');
+			container.innerHTML = '';
+			list.forEach(q => {
+				const div = document.createElement('div');
+				div.className = 'queue';
+				div.innerHTML = `<a href="queue.html?name=${q.name}">${q.name}</a> - Messages: ${q.messageCount}`;
+				container.appendChild(div);
+			});
+		}
+
+		function filterQueues() {
+			const term = document.getElementById('search').value.toLowerCase();
+			const filtered = queues.filter(q => q.name.toLowerCase().includes(term));
+			renderQueues(filtered);
+		}
+
+		function nextPage() {
+			currentPage++;
+			fetchQueues(currentPage);
+		}
+
+		function prevPage() {
+			if (currentPage > 1) {
+				currentPage--;
+				fetchQueues(currentPage);
+			}
+		}
+
+		fetchQueues(currentPage);
+	</script>
+</body>
+</html>
