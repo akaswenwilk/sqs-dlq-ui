@@ -1,48 +1,29 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/akaswenwilk/sqs-dlq-ui/model"
 	"github.com/gorilla/mux"
 )
 
-type Message struct {
-	MessageId     string `json:"messageId"`
-	Body          string `json:"body"`
-	ReceiptHandle string `json:"receiptHandle"`
+type ListMessagesResponse struct {
+	Messages []model.Message `json:"messages"`
+	Total    int             `json:"total"`
 }
 
 func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	vars := mux.Vars(r)
 	queueName := vars["queueName"]
-	queueURL, err := h.getQueueURLByName(ctx, queueName)
+	messages, total, err := h.repo.FetchMessages(ctx, queueName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	result, err := h.sqsClient.ReceiveMessage(context.TODO(), &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 10,
-		WaitTimeSeconds:     1,
-		AttributeNames:      []types.QueueAttributeName{"All"},
+	json.NewEncoder(w).Encode(ListMessagesResponse{
+		Messages: messages,
+		Total:    total,
 	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	var messages []Message
-	for _, m := range result.Messages {
-		messages = append(messages, Message{
-			MessageId:     *m.MessageId,
-			Body:          *m.Body,
-			ReceiptHandle: *m.ReceiptHandle,
-		})
-	}
-	json.NewEncoder(w).Encode(messages)
 }

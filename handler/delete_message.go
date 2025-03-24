@@ -1,32 +1,31 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/akaswenwilk/sqs-dlq-ui/model"
 	"github.com/gorilla/mux"
+	"github.com/samber/lo"
 )
 
 func (h *Handler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	vars := mux.Vars(r)
 	queueName := vars["queueName"]
-	queueURL, err := h.getQueueURLByName(ctx, queueName)
+	messageID := vars["messageID"]
+	messages, _, err := h.repo.FetchMessages(ctx, queueName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	receiptHandle := r.URL.Query().Get("receiptHandle")
-	if receiptHandle == "" {
-		http.Error(w, "receiptHandle required", http.StatusBadRequest)
+	messageToDelete, found := lo.Find(messages, func(msg model.Message) bool {
+		return msg.MessageId == messageID
+	})
+	if !found {
+		http.Error(w, "Message not found", http.StatusNotFound)
 		return
 	}
-	_, err = h.sqsClient.DeleteMessage(context.TODO(), &sqs.DeleteMessageInput{
-		QueueUrl:      aws.String(queueURL),
-		ReceiptHandle: aws.String(receiptHandle),
-	})
+	err = h.repo.DeleteMessage(ctx, queueName, messageToDelete.ReceiptHandle)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

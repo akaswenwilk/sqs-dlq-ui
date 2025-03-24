@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.29.9
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.38.1
 	github.com/gorilla/mux v1.8.1
+	github.com/samber/lo v1.49.1
 )
 
 require (
@@ -21,4 +22,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.29.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )

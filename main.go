@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/akaswenwilk/sqs-dlq-ui/handler"
+	"github.com/akaswenwilk/sqs-dlq-ui/repo"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gorilla/mux"
@@ -28,11 +29,12 @@ func main() {
 
 func apiRouter(sqsClient *sqs.Client) http.Handler {
 	r := mux.NewRouter()
-	h := handler.New(r, sqsClient)
+	sqsRepo := repo.New(sqsClient)
+	h := handler.New(sqsRepo)
 	r.HandleFunc("/queues", h.ListQueues).Methods("GET")
 	r.HandleFunc("/queues/{queueName}/messages", h.ListMessages).Methods("GET")
-	r.HandleFunc("/queues/{queueName}/messages/{messageId}/delete", h.DeleteMessage).Methods("POST")
-	r.HandleFunc("/queues/{queueName}/messages/{messageId}/retry", h.RetryMessage).Methods("POST")
+	r.HandleFunc("/queues/{queueName}/messages/{messageID}/delete", h.DeleteMessage).Methods("POST")
+	r.HandleFunc("/queues/{queueName}/messages/{messageID}/retry", h.RetryMessage).Methods("POST")
 	r.HandleFunc("/queues/{queueName}/purge", h.PurgeQueue).Methods("POST")
 	r.HandleFunc("/queues/{queueName}/retryAll", h.RetryAllMessages).Methods("POST")
 	return r
