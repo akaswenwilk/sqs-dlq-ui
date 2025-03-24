@@ -2,122 +2,208 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Queue List</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Queues</title>
   <style>
     body { font-family: sans-serif; margin: 20px; }
-    .queue { padding: 10px; border-bottom: 1px solid #ccc; }
-    .search { margin-bottom: 20px; }
-    .pagination { margin-top: 20px; }
-    a { text-decoration: none; color: blue; }
-    /* Loader modal styles */
-    .loader-overlay {
+    .queue-item { padding: 10px; border-bottom: 1px solid #ddd; }
+    .queue-item a { text-decoration: none; color: #007aff; }
+    #loading {
       position: fixed;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.5);
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255, 255, 255, 0.8);
       display: flex;
       align-items: center;
       justify-content: center;
+      font-size: 2rem;
+      color: #333;
       z-index: 1000;
       display: none;
     }
-    .loader {
-      background: #fff;
-      padding: 20px;
-      border-radius: 5px;
-      font-size: 1.2em;
+    .pagination { margin-top: 20px; display: flex; align-items: center; }
+    .pagination a { margin: 0 5px; text-decoration: none; color: #007aff; }
+    .pagination a.disabled { pointer-events: none; color: #aaa; }
+    .pagination ul { list-style: none; padding: 0; margin: 0 10px; display: flex; }
+    .pagination li { margin: 0 3px; }
+    .pagination li a { padding: 5px 10px; text-decoration: none; color: #007aff; }
+    .pagination li a.active { font-weight: bold; }
+    .pagination span { margin: 0 5px; }
+    #errorBox {
+      position: fixed;
+      top: 20px; right: 20px;
+      background: #ffe6e6;
+      border: 1px solid #ff0000;
+      color: #ff0000;
+      padding: 15px;
+      z-index: 1100;
+      max-width: 300px;
+      display: none;
+    }
+    #errorBox button {
+      position: absolute;
+      top: 5px; right: 5px;
+      background: transparent;
+      border: none;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #ff0000;
     }
   </style>
 </head>
 <body>
-  <div id="loader" class="loader-overlay">
-    <div class="loader">Loading...</div>
+  <div id="loading">Loading...</div>
+  <div id="errorBox">
+    <button id="closeError">&times;</button>
+    <div id="errorMsg"></div>
   </div>
+  
+  <h1>Queues</h1>
   <div>
-      <input type="text" id="search" class="search" placeholder="Search queues by prefix...">
-      <button onclick="searchWithPrefix()">search prefix</button>
+    <input type="text" id="search" placeholder="Search queues..." />
+    <button id="searchBtn">Search</button>
   </div>
   <div id="queueList"></div>
-  <div class="pagination">
-    <button onclick="prevPage()">Prev</button>
-    <span id="pageNum"></span>
-    <button onclick="nextPage()">Next</button>
-  </div>
+  
+  <nav class="pagination" id="pagination">
+    <a href="#" id="prevLink">Previous</a>
+    <ul id="pageLinks"></ul>
+    <a href="#" id="nextLink">Next</a>
+  </nav>
+
   <script>
-    const loader = document.getElementById('loader');
-    function showLoader() {
-      loader.style.display = 'flex';
-    }
-    function hideLoader() {
-      loader.style.display = 'none';
+    const perPage = 10;
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentQuery = "";
+
+    function setLoading(isLoading) {
+      document.getElementById("loading").style.display = isLoading ? "flex" : "none";
     }
 
-    // Read initial page and size from URL query parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    let currentPage = parseInt(urlParams.get('page')) || 1;
-    let pageSize = parseInt(urlParams.get('size')) || 10;
-    let prefix = urlParams.get('prefix') || '';
-    let queues = [];
-    document.getElementById('pageNum').innerText = currentPage;
-
-    // Update URL params on page change
-    function updateURL() {
-      const newUrl = `${window.location.pathname}?page=${currentPage}&size=${pageSize}&prefix=${prefix}`;
-      window.history.pushState({page: currentPage}, '', newUrl);
-    }
-    
-    function searchWithPrefix() {
-      const term = document.getElementById('search').value;
-      currentPage = 1;
-      prefix = term;
-      updateURL();
-      fetchQueues(currentPage);
+    function showError(message) {
+      document.getElementById("errorMsg").textContent = message;
+      document.getElementById("errorBox").style.display = "block";
     }
 
-    function fetchQueues(page = 1) {
-      showLoader();
-      fetch(`/api/queues?page=${page}&size=${pageSize}&prefix=${prefix}`)
-        .then(res => res.json())
-        .then(data => {
-          queues = data;
-          renderQueues(queues);
-          document.getElementById('pageNum').innerText = currentPage;
-          hideLoader();
-        })
-        .catch(err => {
-          console.error(err);
-          hideLoader();
-        });
+    document.getElementById("closeError").addEventListener("click", () => {
+      document.getElementById("errorBox").style.display = "none";
+    });
+
+    function updateUrlParams(page, query) {
+      const params = new URLSearchParams();
+      if (page) params.set("page", page);
+      if (query) params.set("query", query);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      history.pushState(null, "", newUrl);
     }
 
-    function renderQueues(list) {
-      const container = document.getElementById('queueList');
-      container.innerHTML = '';
-      list.forEach(q => {
-        const div = document.createElement('div');
-        div.className = 'queue';
-        div.innerHTML = `<a href="queue.html?name=${q.name}">${q.name}</a> - Messages: ${q.messageCount}`;
+    async function fetchQueues(page = 1, query = "") {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/queues?page=${page}&search=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        let queues = data.queues;
+        if (!Array.isArray(queues)) {
+          queues = Object.values(queues);
+        }
+        renderQueues(queues);
+        totalPages = Math.ceil(data.total / perPage);
+        currentPage = page;
+        updateUrlParams(currentPage, currentQuery);
+        renderPagination();
+      } catch (error) {
+        console.error("Error fetching queues:", error);
+        showError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function renderQueues(queues) {
+      const container = document.getElementById("queueList");
+      container.innerHTML = "";
+      queues.forEach(queue => {
+        const div = document.createElement("div");
+        div.className = "queue-item";
+        const link = document.createElement("a");
+        link.href = `/queues/${queue.id}`;
+        link.textContent = queue.name;
+        div.appendChild(link);
         container.appendChild(div);
       });
     }
 
-    function nextPage() {
-      currentPage++;
-      updateURL();
-      fetchQueues(currentPage);
-    }
+    function renderPagination() {
+      const prevLink = document.getElementById("prevLink");
+      const nextLink = document.getElementById("nextLink");
 
-    function prevPage() {
-      if (currentPage > 1) {
-        currentPage--;
-        updateURL();
-        fetchQueues(currentPage);
+      prevLink.className = (currentPage === 1) ? "disabled" : "";
+      nextLink.className = (currentPage === totalPages || totalPages === 0) ? "disabled" : "";
+
+      prevLink.onclick = (e) => {
+        e.preventDefault();
+        if (currentPage > 1) fetchQueues(currentPage - 1, currentQuery);
+      };
+      nextLink.onclick = (e) => {
+        e.preventDefault();
+        if (currentPage < totalPages) fetchQueues(currentPage + 1, currentQuery);
+      };
+
+      const pageLinksContainer = document.getElementById("pageLinks");
+      pageLinksContainer.innerHTML = "";
+      let pages = [];
+      if(totalPages <= 5) {
+        for(let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        if(currentPage <= 3) {
+          pages = [1, 2, 3, 4, '...', totalPages];
+        } else if(currentPage >= totalPages - 2) {
+          pages = [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+        } else {
+          pages = [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages];
+        }
       }
+      pages.forEach(item => {
+        const li = document.createElement("li");
+        if(item === '...') {
+          const span = document.createElement("span");
+          span.textContent = '...';
+          li.appendChild(span);
+        } else {
+          const a = document.createElement("a");
+          a.href = "#";
+          a.textContent = item;
+          if(item === currentPage) a.classList.add("active");
+          a.onclick = (e) => {
+            e.preventDefault();
+            fetchQueues(item, currentQuery);
+          };
+          li.appendChild(a);
+        }
+        pageLinksContainer.appendChild(li);
+      });
     }
 
-    fetchQueues(currentPage);
+    document.getElementById("searchBtn").addEventListener("click", () => {
+      currentQuery = document.getElementById("search").value;
+      fetchQueues(1, currentQuery);
+    });
+
+    // On page load, read URL params
+    document.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const pageParam = parseInt(params.get("page"), 10);
+      const queryParam = params.get("query");
+      if (pageParam && !isNaN(pageParam)) currentPage = pageParam;
+      if (queryParam) {
+        currentQuery = queryParam;
+        document.getElementById("search").value = currentQuery;
+      }
+      fetchQueues(currentPage, currentQuery);
+    });
   </script>
 </body>
 </html>

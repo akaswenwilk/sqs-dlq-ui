@@ -44,6 +44,7 @@ func (r *repo) watchQueues() {
 		)
 		for {
 			result, err := r.client.ListQueues(ctx, &sqs.ListQueuesInput{
+				MaxResults: aws.Int32(1000),
 				NextToken: nextToken,
 			})
 			if err != nil {
@@ -70,14 +71,17 @@ func (r *repo) ListQueues(ctx context.Context, page, size int, search string) ([
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var queues []Queue
+	allQueues := r.queues
+	if search != "" {
+		allQueues = lo.Filter(r.queues, func(q Queue, _ int) bool {
+			return strings.Contains(q.Name, search)
+		})
+	}
 	for i := page*size - size; i < page*size; i++ {
-		if i >= len(r.queues) {
+		if i >= len(allQueues) {
 			break
 		}
-		if search != "" && !strings.Contains(r.queues[i].Name, search) {
-			continue
-		}
-		queues = append(queues, r.queues[i])
+		queues = append(queues, allQueues[i])
 	}
 	return lo.Map(queues, func(q Queue, _ int) model.QueueInfo {
 		count, err := r.getMessageCount(ctx, q.URL)
@@ -94,7 +98,7 @@ func (r *repo) ListQueues(ctx context.Context, page, size int, search string) ([
 			Name:         q.Name,
 			MessageCount: count,
 		}
-	}), len(queues), nil
+	}), len(allQueues), nil
 }
 
 func (r *repo) FetchMessages(ctx context.Context, queueName string) ([]model.Message, int, error) {
